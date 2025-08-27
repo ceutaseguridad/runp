@@ -56,7 +56,7 @@ RUN mkdir -p /ComfyUI/models/clip_vision
 RUN wget -O /ComfyUI/models/ipadapter/ip-adapter-plus-face_sd15.bin https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus-face_sd15.bin
 
 # URL del CLIP Vision corregida y archivo renombrado para compatibilidad.
-RUN wget -O /ComfyUI/models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/resolve/main/pytorch_model.bin
+RUN wget -O /ComfyUI/models/clip_vision/pytorch_model.bin https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/resolve/main/pytorch_model.bin
 
 # 4. Modelos de AnimateDiff
 RUN mkdir -p /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models
@@ -70,3 +70,4 @@ COPY app_handler.py .
 
 # Comando que se ejecuta cuando el worker serverless se inicia
 CMD ["python", "-u", "app_handler.py"]
+
