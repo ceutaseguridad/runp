@@ -39,7 +39,7 @@ def handler(job: Dict) -> Dict:
     job_input = job['input']
     
     # NUEVA ESTRUCTURA DE INPUT: Esperamos URLs en lugar de Base64
-    if not all(k in job_input for k in ['base_video_url', 'face_image_url', 'prompt']):
+    if not all(k in job_input for k in ['base_video_s3', 'face_image_s3', 'prompt']):
         return {"error": "Faltan entradas requeridas: 'base_video_url', 'face_image_url', 'prompt'"}
 
     clean_directory(TEMP_DIR)
@@ -50,14 +50,14 @@ def handler(job: Dict) -> Dict:
     print("Descargando archivos de entrada desde S3...")
     try:
         video_path = os.path.join(TEMP_DIR, "base_video.mp4")
-        response_video = requests.get(job_input['base_video_url'], stream=True)
+        response_video = requests.get(job_input['base_video_s3'], stream=True)
         response_video.raise_for_status()
         with open(video_path, "wb") as f:
             for chunk in response_video.iter_content(chunk_size=8192):
                 f.write(chunk)
         
         face_image_path = os.path.join(INPUT_DIR, "face_reference.png")
-        response_face = requests.get(job_input['face_image_url'], stream=True)
+        response_face = requests.get(job_input['face_image_s3'], stream=True)
         response_face.raise_for_status()
         with open(face_image_path, "wb") as f:
             for chunk in response_face.iter_content(chunk_size=8192):
@@ -112,3 +112,4 @@ def handler(job: Dict) -> Dict:
 # --- Iniciar el servidor de RunPod ---
 if __name__ == "__main__":
     # ... (sin cambios)
+
