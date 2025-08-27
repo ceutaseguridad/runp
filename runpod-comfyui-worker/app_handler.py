@@ -90,29 +90,33 @@ def handler(job: Dict) -> Dict:
     clean_directory(INPUT_DIR)
     clean_directory(OUTPUT_DIR)
     
-    # CORRECCIÓN 2: No descargar desde S3. RunPod ya lo ha hecho.
-    # Los archivos están disponibles en el directorio actual.
-    print("Localizando archivos de entrada (RunPod ya los ha descargado)...")
-    try:
-        video_filename = job_input['video_filename']
-        face_filename = job_input['face_filename']
-        
-        # La ruta local donde RunPod deja los archivos
-        video_path_on_disk = os.path.join(os.getcwd(), video_filename)
-        face_path_on_disk = os.path.join(os.getcwd(), face_filename)
-        
-        if not os.path.exists(video_path_on_disk) or not os.path.exists(face_path_on_disk):
-            return {"error": f"Los archivos de entrada no se encontraron en el disco. Buscando '{video_path_on_disk}' y '{face_path_on_disk}'."}
+    # CORRECCIÓN 2.1: Buscar los archivos en la ruta correcta.
+print("Localizando archivos de entrada (RunPod ya los ha descargado)...")
+try:
+    video_filename = job_input['video_filename']
+    face_filename = job_input['face_filename']
+    
+    # RunPod descarga los archivos en la raíz del volumen, no en el directorio de trabajo.
+    video_path_on_disk = os.path.join("/", video_filename)
+    face_path_on_disk = os.path.join("/", face_filename)
+    
+    # Para depuración, vamos a listar los contenidos de la raíz.
+    print(f"Buscando archivos en la raíz. Contenido de '/': {os.listdir('/')}")
+    print(f"Directorio de trabajo actual (getcwd): {os.getcwd()}")
+    
+    if not os.path.exists(video_path_on_disk) or not os.path.exists(face_path_on_disk):
+        # Devolvemos un error aún más detallado.
+        return {"error": f"Los archivos de entrada no se encontraron. Buscando en '{video_path_on_disk}' y '{face_path_on_disk}'. Contenido real de la raíz: {os.listdir('/')}"}
 
-        # ComfyUI necesita los archivos en su propio directorio de 'input'
-        # Copiamos la imagen de la cara allí
-        face_image_path_in_comfyui = os.path.join(INPUT_DIR, face_filename)
-        shutil.copy(face_path_on_disk, face_image_path_in_comfyui)
-        print(f"Vídeo base: {video_path_on_disk}")
-        print(f"Imagen de cara copiada a: {face_image_path_in_comfyui}")
+    # ComfyUI necesita los archivos en su propio directorio de 'input'
+    # Copiamos la imagen de la cara allí
+    face_image_path_in_comfyui = os.path.join(INPUT_DIR, face_filename)
+    shutil.copy(face_path_on_disk, face_image_path_in_comfyui)
+    print(f"Éxito: Vídeo base encontrado en: {video_path_on_disk}")
+    print(f"Éxito: Imagen de cara copiada a: {face_image_path_in_comfyui}")
 
-    except Exception as e:
-        return {"error": f"Error preparando los archivos de entrada: {e}"}
+except Exception as e:
+    return {"error": f"Error preparando los archivos de entrada: {e}"}
 
     # 2. Pre-Producción (ahora usa la ruta correcta del vídeo)
     print("Iniciando pre-producción (extrayendo frames y audio)...")
@@ -179,3 +183,4 @@ if __name__ == "__main__":
         shutil.copyfile(os.path.join(COMFYUI_PATH, "../workflow_api.json"), "/workflow_api.json")
     print("Iniciando worker de ComfyUI para RunPod...")
     runpod.serverless.start({"handler": handler})
+
