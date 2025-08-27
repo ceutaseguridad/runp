@@ -131,8 +131,8 @@ def handler(job: Dict) -> Dict:
         video_filename = job_input['video_filename']
         face_filename = job_input['face_filename']
         
-        video_path_on_disk = video_filename
-        face_path_on_disk = face_filename
+        video_path_on_disk = os.path.join("/", video_filename)
+        face_path_on_disk = os.path.join("/", face_filename)
         
         print(f"Buscando archivos en la raíz. Contenido de '/': {os.listdir('/')}")
         print(f"Directorio de trabajo actual (getcwd): {os.getcwd()}")
@@ -140,7 +140,7 @@ def handler(job: Dict) -> Dict:
         if not os.path.exists(video_path_on_disk) or not os.path.exists(face_path_on_disk):
             return {"error": f"Los archivos de entrada no se encontraron. Buscando en '{video_path_on_disk}' y '{face_path_on_disk}'. Contenido real de la raíz: {os.listdir('/')}"}
 
-        face_image_path_in_comfyui = os.path.join(INPUT_DIR, face_filename)
+        face_image_path_in_comfyui = os.path.join(INPUT_DIR, "face_reference.png")
         shutil.copy(face_path_on_disk, face_image_path_in_comfyui)
         print(f"Éxito: Vídeo base encontrado en: {video_path_on_disk}")
         print(f"Éxito: Imagen de cara copiada a: {face_image_path_in_comfyui}")
@@ -204,4 +204,5 @@ if __name__ == "__main__":
         shutil.copyfile(os.path.join(COMFYUI_PATH, "../workflow_api.json"), "/workflow_api.json")
     print("Iniciando el servicio serverless de RunPod...")
     runpod.serverless.start({"handler": handler})
+
 
