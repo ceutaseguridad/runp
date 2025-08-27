@@ -1,5 +1,5 @@
 # FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
-ARG CACHE_BUSTER=2024-05-23T12:00:00Z
+ARG CACHE_BUSTER=2024-05-24T10:00:00Z
 
 # Usamos la imagen oficial de RunPod con Pytorch y CUDA preinstalados.
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Establecer el directorio de trabajo principal
 WORKDIR /
 
-# Instalar las dependencias de Python
+# Instalar las dependencias de Python del handler
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -26,7 +26,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR /
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git
 WORKDIR /ComfyUI
-RUN pip install -r requirements.txt
+
+# CORRECCIÓN 1: Fijar la versión de NumPy a <2.0 para evitar conflictos de compatibilidad.
+# Esto resuelve la advertencia "A module that was compiled using NumPy 1.x cannot be run in NumPy 2.x".
+# Se instala junto con los requirements de ComfyUI para asegurar la compatibilidad.
+RUN pip install --no-cache-dir -r requirements.txt numpy==1.26.4
 
 # Clonar el manager de ComfyUI para instalar otros nodos
 RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/ComfyUI-Manager
@@ -35,6 +39,11 @@ RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/Comfy
 RUN git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git custom_nodes/comfyui_controlnet_aux
 RUN git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git custom_nodes/ComfyUI_IPAdapter_plus
 RUN git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git custom_nodes/ComfyUI-AnimateDiff-Evolved
+
+# CORRECCIÓN 2: Instalar dependencias faltantes de los custom nodes.
+# El nodo comfyui_controlnet_aux requiere matplotlib pero no lo declara en sus dependencias.
+# Lo instalamos manualmente para resolver el error "ModuleNotFoundError: No module named 'matplotlib'".
+RUN pip install --no-cache-dir matplotlib
 
 # Volver al directorio raíz para las siguientes operaciones
 WORKDIR /
@@ -70,4 +79,3 @@ COPY app_handler.py .
 
 # Comando que se ejecuta cuando el worker serverless se inicia
 CMD ["python", "-u", "app_handler.py"]
-
