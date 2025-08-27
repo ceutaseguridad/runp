@@ -1,0 +1,267 @@
+{
+  "3": {
+    "inputs": {
+      "ckpt_name": "realisticVisionV60.safensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "masterpiece, best quality, ultra-realistic, professional photo of a beautiful woman, (nude:1.2), detailed skin, skin pores",
+      "clip": [
+        "3",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "bad quality, low quality, bad hands, deformed, blurry, cgi, 3d, render, anime",
+      "clip": [
+        "3",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "6": {
+    "inputs": {
+      "image": "face_reference.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Face Reference Image"
+    }
+  },
+  "7": {
+    "inputs": {
+      "directory": "video_frames",
+      "image_load_cap": 0,
+      "skip_first_images": 0,
+      "select_every_nth": 1
+    },
+    "class_type": "LoadImageBatch",
+    "_meta": {
+      "title": "Load Video Frames"
+    }
+  },
+  "8": {
+    "inputs": {
+      "start_percent": 0,
+      "end_percent": 1,
+      "strength": 1,
+      "control_net_name": "control_v11p_sd15_openpose.pth",
+      "image": [
+        "7",
+        0
+      ],
+      "control_net": [
+        "3",
+        2
+      ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet (OpenPose)"
+    }
+  },
+  "9": {
+    "inputs": {
+      "seed": 8566257,
+      "steps": 25,
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 0.65,
+      "model": [
+        "25",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "10": {
+    "inputs": {
+      "filename_prefix": "ResultFrames",
+      "images": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Output Frames"
+    }
+  },
+  "11": {
+    "inputs": {
+      "samples": [
+        "9",
+        0
+      ],
+      "vae": [
+        "3",
+        3
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "13": {
+    "inputs": {
+      "start_percent": 0,
+      "end_percent": 1,
+      "strength": 0.8,
+      "control_net_name": "control_v11p_sd15_softedge.pth",
+      "image": [
+        "7",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "control_net": [
+        "3",
+        2
+      ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet (SoftEdge)"
+    }
+  },
+  "14": {
+    "inputs": {
+      "preprocessor": "softedge_hed",
+      "image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "SoftEdge_Preprocessor",
+    "_meta": {
+      "title": "SoftEdge_Preprocessor"
+    }
+  },
+  "15": {
+    "inputs": {
+      "preprocessor": "openpose",
+      "image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "OpenposePreprocessor",
+    "_meta": {
+      "title": "OpenposePreprocessor"
+    }
+  },
+  "25": {
+    "inputs": {
+      "weight": 1,
+      "weight_face": 1.1,
+      "start_at": 0,
+      "end_at": 1,
+      "model": [
+        "13",
+        0
+      ],
+      "ipadapter": [
+        "26",
+        0
+      ],
+      "image": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter Advanced"
+    }
+  },
+  "26": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus-face_sd15.bin"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter ModelLoader"
+    }
+  },
+  "27": {
+    "inputs": {
+      "model_name": "mm_sd_v15_v2.ckpt",
+      "beta_schedule": "sqrt_linear",
+      "motion_scale": 1,
+      "context_options": [
+        "29",
+        0
+      ],
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "ADE_AnimateDiffLoader",
+    "_meta": {
+      "title": "AnimateDiff Loader"
+    }
+  },
+  "28": {
+    "inputs": {
+      "width": 512,
+      "height": 768,
+      "batch_size": 16,
+      "model": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "ADE_EmptyLatentImageLarge",
+    "_meta": {
+      "title": "AnimateDiff-aware Empty Latent"
+    }
+  },
+  "29": {
+    "inputs": {
+      "context_length": 16,
+      "context_stride": 1,
+      "context_overlap": 4,
+      "closed_loop": false
+    },
+    "class_type": "ADE_ContextOptions",
+    "_meta": {
+      "title": "Context Options"
+    }
+  }
+}
