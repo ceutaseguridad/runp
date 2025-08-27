@@ -58,6 +58,7 @@ RUN wget -O /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models/mm_sd_v15_v
 
 # --- Preparación Final ---
 # Copiar nuestro script handler
+COPY workflow_api.json .
 COPY app_handler.py .
 
 # Exponer el puerto por si queremos probarlo en un Pod estándar (opcional)
