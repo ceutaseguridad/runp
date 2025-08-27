@@ -1,3 +1,6 @@
+# FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
+ARG CACHE_BUSTER=2024-05-23T12:00:00Z
+
 # Usamos la imagen oficial de RunPod con Pytorch y CUDA preinstalados.
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
 
