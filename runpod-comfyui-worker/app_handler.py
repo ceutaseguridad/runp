@@ -131,8 +131,8 @@ def handler(job: Dict) -> Dict:
         video_filename = job_input['video_filename']
         face_filename = job_input['face_filename']
         
-        video_path_on_disk = os.path.join("/", video_filename)
-        face_path_on_disk = os.path.join("/", face_filename)
+        video_path_on_disk = video_filename
+        face_path_on_disk = face_filename
         
         print(f"Buscando archivos en la raíz. Contenido de '/': {os.listdir('/')}")
         print(f"Directorio de trabajo actual (getcwd): {os.getcwd()}")
@@ -204,3 +204,4 @@ if __name__ == "__main__":
         shutil.copyfile(os.path.join(COMFYUI_PATH, "../workflow_api.json"), "/workflow_api.json")
     print("Iniciando el servicio serverless de RunPod...")
     runpod.serverless.start({"handler": handler})
+
