@@ -1,0 +1,55 @@
+import os
+import torch
+from PIL import Image
+import numpy as np
+import folder_paths
+
+class PutoCargadorDeSecuencias:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "directory": ("STRING", {"default": "ComfyUI/input/video_frames"}),
+                "start_at": ("INT", {"default": 0, "min": 0, "step": 1}),
+                "load_cap": ("INT", {"default": 9999, "min": 1, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "load_sequence"
+    CATEGORY = "Puta Carga"
+
+    def load_sequence(self, directory, start_at, load_cap):
+        if not os.path.isdir(directory):
+            raise FileNotFoundError(f"Directorio no encontrado: {directory}")
+
+        files = sorted([f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))])
+        if not files:
+            raise FileNotFoundError(f"No se encontraron archivos en el directorio: {directory}")
+        
+        images = []
+        files_to_load = files[start_at : start_at + load_cap]
+
+        for filename in files_to_load:
+            try:
+                img_path = os.path.join(directory, filename)
+                i = Image.open(img_path)
+                i = i.convert("RGB")
+                image = np.array(i).astype(np.float32) / 255.0
+                image = torch.from_numpy(image)[None,]
+                images.append(image)
+            except Exception as e:
+                print(f"Error al cargar la imagen {filename}: {e}")
+        
+        if not images:
+            raise Exception("No se pudo cargar ninguna imagen de la secuencia.")
+
+        return (torch.cat(images, dim=0),)
+
+NODE_CLASS_MAPPINGS = {
+    "PutoCargadorDeSecuencias": PutoCargadorDeSecuencias
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "PutoCargadorDeSecuencias": "Cargador de Secuencias (El Nuestro)"
+}
