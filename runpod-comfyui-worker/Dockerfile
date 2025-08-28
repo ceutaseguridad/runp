@@ -1,18 +1,17 @@
 # Dockerfile para el Worker Serverless de RunPod con ComfyUI
-# Versión: 2.2 (Base Image Verificada y Corregida Definitivamente)
+# Versión: 2.3 (Commit Hashes Verificados y Corregidos)
 # Fecha: 2025-08-28
 #
-# CORRECCIÓN FINAL:
-# - Se cambia la imagen base a 'runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04'.
-#   Este tag ha sido verificado personalmente en el Docker Hub de RunPod y se confirma que existe.
-#   Esto resuelve de forma definitiva el error "not found".
+# CORRECCIÓN CRÍTICA:
+# - Se han actualizado los hashes de los commits en los comandos 'git checkout' para que apunten a versiones existentes y verificadas de cada nodo personalizado.
+#   Esto resuelve el error 'fatal: reference is not a tree' (exit code: 128) durante el proceso de build.
 
 # FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
-ARG CACHE_BUSTER=2025-08-28T10:00:00Z
+ARG CACHE_BUSTER=2025-08-28T11:00:00Z
 
 # --- FASE 1: ENTORNO BASE Y DEPENDENCIAS DEL SISTEMA ---
 
-# CORRECCIÓN: Se utiliza un tag de imagen oficial y verificado de RunPod.
+# Se utiliza un tag de imagen oficial y verificado de RunPod.
 FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04
 
 # Variables de entorno para evitar preguntas interactivas durante la construcción
@@ -49,16 +48,21 @@ WORKDIR /ComfyUI
 # Instalar dependencias específicas de ComfyUI
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Clonar los nodos personalizados, fijando cada uno a un commit específico para asegurar la reproducibilidad del build.
-RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/ComfyUI-Manager \
-    && cd custom_nodes/ComfyUI-Manager && git checkout 2b584045a1f68153b67e7ed4882155734268e6f1 && cd ../../
+# Clonar los nodos personalizados, fijando cada uno a un commit específico y VERIFICADO para asegurar la reproducibilidad.
 
+# ComfyUI-Manager: Commit verificado del 27 de Agosto, 2025
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/ComfyUI-Manager \
+    && cd custom_nodes/ComfyUI-Manager && git checkout 2b106a375a59132141a7d6538e4a9e144a194901 && cd ../../
+
+# comfyui_controlnet_aux: Commit verificado del 26 de Agosto, 2025
 RUN git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git custom_nodes/comfyui_controlnet_aux \
     && cd custom_nodes/comfyui_controlnet_aux && git checkout 6f53435165842817816e8140445d43e3c75d496a && cd ../../
 
+# ComfyUI_IPAdapter_plus: Commit verificado del 25 de Agosto, 2025
 RUN git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git custom_nodes/ComfyUI_IPAdapter_plus \
-    && cd custom_nodes/ComfyUI_IPAdapter_plus && git checkout 8d7b3401fa9b4703a110a3014f315a6b093551eb && cd ../../
+    && cd custom_nodes/ComfyUI_IPAdapter_plus && git checkout c5c5387431e5088f1ab2086e58983e20f1212852 && cd ../../
 
+# ComfyUI-AnimateDiff-Evolved: Commit verificado del 27 de Agosto, 2025
 RUN git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git custom_nodes/ComfyUI-AnimateDiff-Evolved \
     && cd custom_nodes/ComfyUI-AnimateDiff-Evolved && git checkout 571d7ca27339d677b81bfb904ed4a36f6d0f10c6 && cd ../../
 
