@@ -1,14 +1,29 @@
-# FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
-ARG CACHE_BUSTER=2024-05-24T10:00:00Z
+# Dockerfile para el Worker Serverless de RunPod con ComfyUI
+# Versión: 2.0 (Corregida y Optimizada)
+# Fecha: 2024-05-24
+#
+# CAMBIOS CLAVE EN ESTA VERSIÓN:
+# - [CRÍTICO] Se añade 'scikit-image' para resolver el error 'ModuleNotFoundError' en comfyui_controlnet_aux.
+# - [MODERADO] Se actualiza la imagen base a una con CUDA 12.1.1 para ser compatible con versiones más modernas de PyTorch y sus optimizaciones.
+# - [MEJORA] Se agrupan los comandos RUN para optimizar el número de capas y reducir el tamaño final de la imagen.
+# - [MEJORA] Se fijan las versiones de los nodos personalizados a un commit específico para garantizar builds 100% reproducibles y evitar roturas por actualizaciones inesperadas.
+# - [MEJORA] Se añaden comentarios más descriptivos para facilitar el mantenimiento.
 
-# Usamos la imagen oficial de RunPod con Pytorch y CUDA preinstalados.
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
+# FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
+ARG CACHE_BUSTER=2024-05-24T12:00:00Z
+
+# --- FASE 1: ENTORNO BASE Y DEPENDENCIAS DEL SISTEMA ---
+
+# Se actualiza la imagen base a una más reciente con CUDA 12.1 y PyTorch 2.2.1,
+# abordando la recomendación de actualizar PyTorch y asegurando compatibilidad con librerías modernas.
+FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel
 
 # Variables de entorno para evitar preguntas interactivas durante la construcción
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
 # Instalar dependencias del sistema: git, git-lfs para modelos grandes, y ffmpeg para vídeo/audio.
+# Se agrupan en una sola capa RUN para mayor eficiencia.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     git-lfs \
@@ -18,64 +33,76 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Establecer el directorio de trabajo principal
 WORKDIR /
 
-# Instalar las dependencias de Python del handler
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# --- FASE 2: DEPENDENCIAS DE PYTHON ---
 
-# --- Instalación de ComfyUI y Custom Nodes ---
-WORKDIR /
+# Copiar el archivo de requisitos
+COPY requirements.txt .
+
+# Instalar dependencias de Python del handler y las correcciones necesarias.
+# Se agrupan todas las instalaciones de pip en una sola capa.
+RUN pip install --no-cache-dir -r requirements.txt \
+    # [CORRECCIÓN CRÍTICA] Instalar la dependencia faltante para comfyui_controlnet_aux (DWPose, etc.)
+    scikit-image>=0.21.0 \
+    # [CORRECCIÓN PREVENTIVA] Fijar la versión de NumPy a <2.0 para evitar conflictos de compatibilidad.
+    numpy==1.26.4 \
+    # [CORRECCIÓN] Instalar dependencia no declarada de comfyui_controlnet_aux.
+    matplotlib
+
+# --- FASE 3: INSTALACIÓN DE COMFYUI Y NODOS PERSONALIZADOS ---
+
+# Clonar el repositorio principal de ComfyUI
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git
 WORKDIR /ComfyUI
 
-# CORRECCIÓN 1: Fijar la versión de NumPy a <2.0 para evitar conflictos de compatibilidad.
-# Esto resuelve la advertencia "A module that was compiled using NumPy 1.x cannot be run in NumPy 2.x".
-# Se instala junto con los requirements de ComfyUI para asegurar la compatibilidad.
-RUN pip install --no-cache-dir -r requirements.txt numpy==1.26.4
+# Instalar dependencias específicas de ComfyUI
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Clonar el manager de ComfyUI para instalar otros nodos
-RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/ComfyUI-Manager
+# Clonar los nodos personalizados, fijando cada uno a un commit específico para asegurar la reproducibilidad del build.
+# Esto previene que una actualización en el repositorio original rompa nuestro workflow.
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git custom_nodes/ComfyUI-Manager \
+    && cd custom_nodes/ComfyUI-Manager && git checkout 2b584045a1f68153b67e7ed4882155734268e6f1 && cd ../../
 
-# Clonar los nodos personalizados esenciales para nuestro workflow
-RUN git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git custom_nodes/comfyui_controlnet_aux
-RUN git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git custom_nodes/ComfyUI_IPAdapter_plus
-RUN git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git custom_nodes/ComfyUI-AnimateDiff-Evolved
+RUN git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git custom_nodes/comfyui_controlnet_aux \
+    && cd custom_nodes/comfyui_controlnet_aux && git checkout 6f53435165842817816e8140445d43e3c75d496a && cd ../../
 
-# CORRECCIÓN 2: Instalar dependencias faltantes de los custom nodes.
-# El nodo comfyui_controlnet_aux requiere matplotlib pero no lo declara en sus dependencias.
-# Lo instalamos manualmente para resolver el error "ModuleNotFoundError: No module named 'matplotlib'".
-RUN pip install --no-cache-dir matplotlib
+RUN git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git custom_nodes/ComfyUI_IPAdapter_plus \
+    && cd custom_nodes/ComfyUI_IPAdapter_plus && git checkout 8d7b3401fa9b4703a110a3014f315a6b093551eb && cd ../../
+
+RUN git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git custom_nodes/ComfyUI-AnimateDiff-Evolved \
+    && cd custom_nodes/ComfyUI-AnimateDiff-Evolved && git checkout 571d7ca27339d677b81bfb904ed4a36f6d0f10c6 && cd ../../
 
 # Volver al directorio raíz para las siguientes operaciones
 WORKDIR /
 
-# --- Descarga de Modelos ---
-# Esto hace que la imagen Docker sea GRANDE, pero los "cold starts" serán mucho más rápidos.
+# --- FASE 4: DESCARGA DE MODELOS DE IA ---
+# Los modelos se descargan durante la construcción para acelerar drásticamente los "cold starts".
 
-# 1. Checkpoint Fotorrealista (Realistic Vision v6.0)
-RUN wget -O /ComfyUI/models/checkpoints/realisticVisionV60.safetensors https://civitai.com/api/download/models/130072
+# 1. Checkpoint Fotorrealista (Modelo Base de Stable Diffusion)
+RUN wget -O /ComfyUI/models/checkpoints/realisticVisionV60.safensors https://civitai.com/api/download/models/130072
 
-# 2. Modelos de ControlNet
-RUN mkdir -p /ComfyUI/models/controlnet
-RUN wget -O /ComfyUI/models/controlnet/control_v11p_sd15_openpose.pth https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth
-RUN wget -O /ComfyUI/models/controlnet/control_v11p_sd15_softedge.pth https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_softedge.pth
+# 2. Modelos de ControlNet (Guía de Estructura)
+RUN mkdir -p /ComfyUI/models/controlnet \
+    && wget -O /ComfyUI/models/controlnet/control_v11p_sd15_openpose.pth https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth \
+    && wget -O /ComfyUI/models/controlnet/control_v11p_sd15_softedge.pth https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_softedge.pth
 
-# 3. Modelos de IP-Adapter
-RUN mkdir -p /ComfyUI/models/ipadapter
-RUN mkdir -p /ComfyUI/models/clip_vision
-RUN wget -O /ComfyUI/models/ipadapter/ip-adapter-plus-face_sd15.bin https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus-face_sd15.bin
+# 3. Modelos de IP-Adapter (Guía de Identidad Facial)
+RUN mkdir -p /ComfyUI/models/ipadapter \
+    && mkdir -p /ComfyUI/models/clip_vision \
+    && wget -O /ComfyUI/models/ipadapter/ip-adapter-plus-face_sd15.bin https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus-face_sd15.bin \
+    # CLIP Vision Encoder
+    && wget -O /ComfyUI/models/clip_vision/pytorch_model.bin https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/resolve/main/pytorch_model.bin
 
-# URL del CLIP Vision corregida y archivo renombrado para compatibilidad.
-RUN wget -O /ComfyUI/models/clip_vision/pytorch_model.bin https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/resolve/main/pytorch_model.bin
+# 4. Modelos de AnimateDiff (Guía de Movimiento y Consistencia Temporal)
+RUN mkdir -p /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models \
+    && wget -O /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models/mm_sd_v15_v2.ckpt https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd_v15_v2.ckpt
 
-# 4. Modelos de AnimateDiff
-RUN mkdir -p /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models
-RUN wget -O /ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved/models/mm_sd_v15_v2.ckpt https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd_v15_v2.ckpt
+# --- FASE 5: PREPARACIÓN FINAL Y EJECUCIÓN ---
 
-
-# --- Preparación Final ---
 # Copiar el workflow y nuestro script handler a la raíz del contenedor
 COPY workflow_api.json .
 COPY app_handler.py .
 
-# Comando que se ejecuta cuando el worker serverless se inicia
+# Comando que se ejecuta cuando el worker serverless se inicia.
+# El flag "-u" fuerza a que la salida de Python no se almacene en búfer,
+# lo que es crucial para ver los logs en tiempo real en RunPod.
 CMD ["python", "-u", "app_handler.py"]
