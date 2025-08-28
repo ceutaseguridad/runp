@@ -1,7 +1,7 @@
 {
   "3": {
     "inputs": {
-      "ckpt_name": "realisticVisionV60.safensors"
+      "ckpt_name": "realisticVisionV60.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
@@ -62,8 +62,8 @@
       "end_percent": 1,
       "strength": 1,
       "control_net_name": "control_v11p_sd15_openpose.pth",
-      "image": [
-        "7",
+      "image": [ // ANTES: ["7", 0]
+        "15",    // AHORA: Conectado a la salida del Pre-procesador de OpenPose (Nodo 15)
         0
       ],
       "control_net": [
@@ -141,8 +141,8 @@
       "end_percent": 1,
       "strength": 0.8,
       "control_net_name": "control_v11p_sd15_softedge.pth",
-      "image": [
-        "7",
+      "image": [ // ANTES: ["7", 0]
+        "14",    // AHORA: Conectado a la salida del Pre-procesador de SoftEdge (Nodo 14)
         0
       ],
       "positive": [
