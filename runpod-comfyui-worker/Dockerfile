@@ -1,22 +1,18 @@
 # Dockerfile para el Worker Serverless de RunPod con ComfyUI
-# Versión: 2.0 (Corregida y Optimizada)
-# Fecha: 2024-05-24
+# Versión: 2.1 (Base Image Corregida)
+# Fecha: 2025-08-28
 #
-# CAMBIOS CLAVE EN ESTA VERSIÓN:
-# - [CRÍTICO] Se añade 'scikit-image' para resolver el error 'ModuleNotFoundError' en comfyui_controlnet_aux.
-# - [MODERADO] Se actualiza la imagen base a una con CUDA 12.1.1 para ser compatible con versiones más modernas de PyTorch y sus optimizaciones.
-# - [MEJORA] Se agrupan los comandos RUN para optimizar el número de capas y reducir el tamaño final de la imagen.
-# - [MEJORA] Se fijan las versiones de los nodos personalizados a un commit específico para garantizar builds 100% reproducibles y evitar roturas por actualizaciones inesperadas.
-# - [MEJORA] Se añaden comentarios más descriptivos para facilitar el mantenimiento.
+# CORRECCIÓN CRÍTICA:
+# - Se ha cambiado la imagen base en la instrucción FROM a una que existe y está verificada en el Docker Hub de RunPod.
+#   Esto resuelve el error "not found" durante el proceso de build. La nueva imagen utiliza PyTorch 2.3.0, CUDA 12.1.1 y Python 3.11.
 
 # FORZAR UN BUILD SIN CACHÉ CON UN ARGUMENTO QUE CAMBIA
-ARG CACHE_BUSTER=2024-05-24T12:00:00Z
+ARG CACHE_BUSTER=2025-08-28T09:00:00Z
 
 # --- FASE 1: ENTORNO BASE Y DEPENDENCIAS DEL SISTEMA ---
 
-# Se actualiza la imagen base a una más reciente con CUDA 12.1 y PyTorch 2.2.1,
-# abordando la recomendación de actualizar PyTorch y asegurando compatibilidad con librerías modernas.
-FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel
+# CORRECCIÓN: Se utiliza un tag de imagen oficial y existente de RunPod.
+FROM runpod/pytorch:2.3.0-py3.11-cuda12.1.1-devel-ubuntu22.04
 
 # Variables de entorno para evitar preguntas interactivas durante la construcción
 ENV DEBIAN_FRONTEND=noninteractive
@@ -78,7 +74,7 @@ WORKDIR /
 # Los modelos se descargan durante la construcción para acelerar drásticamente los "cold starts".
 
 # 1. Checkpoint Fotorrealista (Modelo Base de Stable Diffusion)
-RUN wget -O /ComfyUI/models/checkpoints/realisticVisionV60.safensors https://civitai.com/api/download/models/130072
+RUN wget -O /ComfyUI/models/checkpoints/realisticVisionV60.safetensors https://civitai.com/api/download/models/130072
 
 # 2. Modelos de ControlNet (Guía de Estructura)
 RUN mkdir -p /ComfyUI/models/controlnet \
