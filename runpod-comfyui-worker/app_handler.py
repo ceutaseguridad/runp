@@ -24,6 +24,7 @@ def log_subprocess_output(pipe):
 
 def start_comfyui_server():
     os.chdir(COMFYUI_PATH)
+    print("Changed directory to ComfyUI. Starting server...", flush=True)
     command = "python main.py --dont-print-server --listen 0.0.0.0 --port 8188"
     
     server_process = subprocess.Popen(
@@ -37,27 +38,38 @@ def start_comfyui_server():
     stdout_thread.start()
     stderr_thread.start()
 
-    timeout = 180
+    print("ComfyUI process started. Waiting for server to become responsive...", flush=True)
+    
+    # Aumentamos el timeout y mejoramos la lógica de espera
+    timeout = 300  # 5 minutos
     start_time = time.time()
+    
+    # Espera inicial pasiva para que ComfyUI cargue modelos antes de sondear
+    time.sleep(15) 
+
     while time.time() - start_time < timeout:
         if server_process.poll() is not None:
             raise RuntimeError(f"ComfyUI process terminated unexpectedly with code {server_process.poll()}.")
 
         try:
-            with urllib.request.urlopen(f"{COMFYUI_URL}/history", timeout=2) as response:
+            with urllib.request.urlopen(f"{COMFYUI_URL}/history", timeout=5) as response:
                 if response.status == 200:
-                    print("ComfyUI server started successfully.")
+                    print("ComfyUI server is responsive and ready.", flush=True)
                     return server_process
-        except Exception:
-            time.sleep(2)
+        except (urllib.error.URLError, ConnectionRefusedError) as e:
+            print(f"Server not ready yet, waiting... (Error: {e})", flush=True)
+            time.sleep(5) # Sondeo menos agresivo
+        except Exception as e:
+            print(f"An unexpected error occurred while checking server status: {e}", flush=True)
+            time.sleep(5)
             
-    raise TimeoutError("Timeout: ComfyUI server did not respond within 3 minutes.")
+    raise TimeoutError("Timeout: ComfyUI server did not become responsive within 5 minutes.")
 
 try:
     server_process = start_comfyui_server()
     CLIENT_ID = str(uuid.uuid4())
 except (RuntimeError, TimeoutError) as e:
-    print(f"Critical error during initialization: {e}", file=sys.stderr)
+    print(f"Critical error during initialization: {e}", file=sys.stderr, flush=True)
     sys.exit(1)
 
 def queue_prompt(prompt: Dict[str, Any], client_id: str) -> Dict[str, Any]:
@@ -95,24 +107,32 @@ def process_video_with_comfyui(frames_input_dir: str, face_ref_path: str, prompt
 def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     job_input = job.get('input', {})
     
-    expected_keys = ['video_filename', 'face_filename', 'prompt']
-    if not all(k in job_input for k in expected_keys):
-        return {"error": f"Missing required inputs. Expected: {expected_keys}, got: {list(job_input.keys())}"}
+    # Espera activa a que los archivos se descarguen en el disco.
+    video_filename = job_input.get('video_filename')
+    face_filename = job_input.get('face_filename')
+
+    if not video_filename or not face_filename:
+        return {"error": "Missing 'video_filename' or 'face_filename' in job input."}
+
+    video_path_on_disk = os.path.join("/", video_filename)
+    face_path_on_disk = os.path.join("/", face_filename)
+    
+    file_wait_timeout = 120 # 2 minutos
+    file_wait_start_time = time.time()
+    while time.time() - file_wait_start_time < file_wait_timeout:
+        if os.path.exists(video_path_on_disk) and os.path.exists(face_path_on_disk):
+            print("Input files found on disk.", flush=True)
+            break
+        print("Waiting for input files to be downloaded...", flush=True)
+        time.sleep(2)
+    else:
+        return {"error": f"Timeout: Input files did not appear on disk within {file_wait_timeout} seconds. Root dir contents: {os.listdir('/')}"}
 
     clean_directory(TEMP_DIR)
     clean_directory(INPUT_DIR)
     clean_directory(OUTPUT_DIR)
     
     try:
-        video_filename = job_input['video_filename']
-        face_filename = job_input['face_filename']
-        
-        video_path_on_disk = os.path.join("/", video_filename)
-        face_path_on_disk = os.path.join("/", face_filename)
-        
-        if not os.path.exists(video_path_on_disk) or not os.path.exists(face_path_on_disk):
-            return {"error": f"Input files not found. Searched for '{video_path_on_disk}' and '{face_path_on_disk}'. Root directory contents: {os.listdir('/')}"}
-
         face_image_path_in_comfyui = os.path.join(INPUT_DIR, "face_reference.png")
         shutil.copy(face_path_on_disk, face_image_path_in_comfyui)
     except Exception as e:
@@ -122,12 +142,15 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     frames_input_dir = os.path.join(INPUT_DIR, "video_frames")
     os.makedirs(frames_input_dir, exist_ok=True)
     try:
+        print("Starting ffmpeg pre-production (extracting frames and audio)...", flush=True)
         subprocess.run(f"ffmpeg -i {video_path_on_disk} -vn -acodec copy {audio_path}", shell=True, check=True, capture_output=True, text=True)
         subprocess.run(f"ffmpeg -i {video_path_on_disk} {os.path.join(frames_input_dir, 'frame_%04d.png')}", shell=True, check=True, capture_output=True, text=True)
+        print("ffmpeg pre-production successful.", flush=True)
     except subprocess.CalledProcessError as e:
-        return {"error": f"FFmpeg pre-production failed: {e.stderr}"}
+        return {"error": f"FFmpeg pre-production failed. Stderr: {e.stderr}"}
 
     try:
+        print("Executing ComfyUI workflow...", flush=True)
         prompt_id = process_video_with_comfyui(frames_input_dir, face_image_path_in_comfyui, job_input['prompt'], "/workflow_api.json")
         
         timeout = 3600
@@ -137,8 +160,10 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             history = get_history(prompt_id)
             if prompt_id in history and history[prompt_id].get('outputs'):
                 workflow_complete = True
+                print("ComfyUI workflow completed.", flush=True)
                 break
-            time.sleep(5)
+            print("Waiting for ComfyUI workflow to complete...", flush=True)
+            time.sleep(10)
         
         if not workflow_complete:
              return {"error": "Timeout: ComfyUI did not complete the workflow in time."}
@@ -148,14 +173,16 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
     final_video_path = os.path.join(TEMP_DIR, "final_video.mp4")
     video_no_audio_path = os.path.join(TEMP_DIR, 'video_no_audio.mp4')
     try:
+        print("Starting ffmpeg post-production (assembling final video)...", flush=True)
         ffmpeg_input_pattern = os.path.join(OUTPUT_DIR, 'ResultFrames_%05d.png')
-        framerate = 24 # Assuming 24 fps, adjust if necessary
+        framerate = 24
         
         cmd1 = f"ffmpeg -framerate {framerate} -i \"{ffmpeg_input_pattern}\" -c:v libx264 -pix_fmt yuv420p {video_no_audio_path}"
         subprocess.run(cmd1, shell=True, check=True, capture_output=True, text=True)
         
         cmd2 = f"ffmpeg -i {video_no_audio_path} -i {audio_path} -c:v copy -c:a aac -shortest {final_video_path}"
         subprocess.run(cmd2, shell=True, check=True, capture_output=True, text=True)
+        print("ffmpeg post-production successful.", flush=True)
     except subprocess.CalledProcessError as e:
         return {"error": f"FFmpeg post-production failed. Stderr: {e.stderr}"}
 
@@ -176,5 +203,5 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
 if __name__ == "__main__":
     if not os.path.exists("/workflow_api.json"):
         shutil.copyfile(os.path.join(COMFYUI_PATH, "../workflow_api.json"), "/workflow_api.json")
-    print("Starting RunPod Serverless Worker...")
+    print("Starting RunPod Serverless Worker...", flush=True)
     runpod.serverless.start({"handler": handler})
