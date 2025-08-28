@@ -19,68 +19,17 @@ INPUT_DIR = os.path.join(COMFYUI_PATH, "input")
 OUTPUT_DIR = os.path.join(COMFYUI_PATH, "output")
 TEMP_DIR = "/tmp/runpod-workspace"
 
-def log_subprocess_output(pipe):
-    for line in iter(pipe.readline, b''):
-        print(f"[ComfyUI] {line.decode('utf-8').strip()}", flush=True)
+#
+# ---- TODA LA LÓGICA DE 'start_comfyui_server' HA SIDO EXTIRPADA ----
+# Su trabajo ahora lo hace el supervisor 'launcher.sh'
+#
 
-def start_comfyui_server():
-    COMFYUI_URL = "http://127.0.0.1:8188"
-    print(f"Starting ComfyUI server using 'Nuke From Orbit' method...", flush=True)
-    
-    # Este es el comando que escribiríamos a mano en la terminal.
-    # Lo envolvemos en una llamada a 'bash -c'. Esto crea un nuevo shell,
-    # cambia de directorio, y LUEGO ejecuta python. Es la forma más robusta
-    # de aislar el subproceso de cualquier influencia extraña del script padre.
-    full_command = f"cd {COMFYUI_PATH} && python main.py --dont-print-server --listen 0.0.0.0 --port 8188"
+# --- INICIALIZACIÓN GLOBAL (AHORA SIMPLE) ---
+CLIENT_ID = str(uuid.uuid4())
+COMFYUI_API_URL = "http://127.0.0.1:8188"
 
-    server_process = subprocess.Popen(
-        ['/bin/bash', '-c', full_command], # Ejecutamos bash, no python directamente
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=os.environ # Mantenemos esto por si acaso
-    )
+# --- LÓGICA DE PROCESAMIENTO (EL MOTOR) ---
 
-    stdout_thread = threading.Thread(target=log_subprocess_output, args=(server_process.stdout,))
-    stderr_thread = threading.Thread(target=log_subprocess_output, args=(server_process.stderr,))
-    stdout_thread.daemon = True
-    stderr_thread.daemon = True
-    stdout_thread.start()
-    stderr_thread.start()
-
-    print("ComfyUI process started. Waiting for server to become responsive...", flush=True)
-    timeout = 300
-    start_time = time.time()
-    
-    # Damos un tiempo de arranque inicial generoso antes de empezar a comprobar.
-    time.sleep(20)
-
-    while time.time() - start_time < timeout:
-        if server_process.poll() is not None:
-            raise RuntimeError(f"ComfyUI process terminated unexpectedly with code {server_process.poll()}. Check logs for errors.")
-        try:
-            with urllib.request.urlopen(f"{COMFYUI_URL}/history", timeout=5) as response:
-                if response.status == 200:
-                    print("ComfyUI server is responsive and ready.", flush=True)
-                    print("Giving ComfyUI an extra 10 seconds to finish loading custom nodes...", flush=True)
-                    time.sleep(10)
-                    return server_process
-        except Exception as e:
-            print(f"Server not ready yet, waiting... (Error: {e})", flush=True)
-            time.sleep(5)
-
-    raise TimeoutError("Timeout: ComfyUI server did not become responsive.")
-
-# --- INICIALIZACIÓN GLOBAL ---
-try:
-    server_process = start_comfyui_server()
-    CLIENT_ID = str(uuid.uuid4())
-    COMFYUI_API_URL = "http://127.0.0.1:8188"
-except (RuntimeError, TimeoutError) as e:
-    print(f"CRITICAL ERROR: Could not start ComfyUI. Exiting.", file=sys.stderr, flush=True)
-    print(e, file=sys.stderr, flush=True)
-    sys.exit(1)
-
-# --- LÓGICA DE PROCESAMIENTO ---
 def queue_prompt(prompt: Dict[str, Any], client_id: str) -> Dict[str, Any]:
     p = {"prompt": prompt, "client_id": client_id}
     data = json.dumps(p).encode('utf-8')
@@ -103,9 +52,9 @@ def process_video_with_comfyui(frames_input_dir: str, face_ref_path: str, prompt
     with open(workflow_path, 'r') as f:
         prompt_workflow = json.load(f)
 
-    # Inyectamos los datos dinámicos en el workflow
     prompt_workflow["4"]["inputs"]["text"] = prompt_text
     prompt_workflow["6"]["inputs"]["image"] = os.path.basename(face_ref_path)
+    # Usamos 'directory' para el nodo Benripack
     prompt_workflow["7"]["inputs"]["directory"] = frames_input_dir
 
     response = queue_prompt(prompt_workflow, CLIENT_ID)
@@ -192,8 +141,10 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         clean_directory(INPUT_DIR)
         clean_directory(OUTPUT_DIR)
 
-# --- SERVIDOR WEB ---
+
+# --- SERVIDOR WEB (LA PUERTA DE ENTRADA) ---
 app = Flask(__name__)
+
 @app.route('/run', methods=['POST'])
 def run_sync():
     print("Received a request on /run", flush=True)
@@ -203,5 +154,5 @@ def run_sync():
     return jsonify(result)
 
 if __name__ == "__main__":
-    print("Initialization complete. Starting Flask server...", flush=True)
+    print("[HANDLER] Starting Flask server...", flush=True)
     app.run(host='0.0.0.0', port=8888)
